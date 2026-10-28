@@ -1,0 +1,10 @@
+<UserControl x:Class="MiniDisplay.Windows.ColorPicker"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <StackPanel>
+    <UniformGrid x:Name="Swatches" Columns="6" />
+    <Button x:Name="OpenButton" Click="CustomColor" Margin="0,9,0,0" Padding="10,7" HorizontalContentAlignment="Stretch" Background="{StaticResource Elevated}" Foreground="{StaticResource Text}" ToolTip="Открыть полную палитру цветов">
+      <Grid MinWidth="160"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><Border x:Name="Swatch" Width="22" Height="22" CornerRadius="4" BorderThickness="1" BorderBrush="#D6DEEA" Margin="0,0,12,0" /><TextBlock x:Name="ColorCode" Grid.Column="1" VerticalAlignment="Center" FontSize="12" /><TextBlock Grid.Column="2" Text="⌄" VerticalAlignment="Center" Foreground="{StaticResource Muted}" /></Grid>
+    </Button>
+  </StackPanel>
+</UserControl>

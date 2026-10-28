@@ -1,0 +1,40 @@
+{
+  "Version": 2,
+  "FramesPerSecond": 20,
+  "AutoRotate": true,
+  "Pages": [
+    {
+      "Id": "11111111-1111-4111-8111-111111111111",
+      "Name": "Часы",
+      "DurationSeconds": 6,
+      "Enabled": true,
+      "Background": "#101C22",
+      "Layers": [
+        { "Id": "11111111-1111-4111-8111-111111111112", "Name": "Подпись", "Type": "Text", "Text": "МОЙ ДИСПЛЕЙ", "X": 18, "Y": 25, "FontSize": 14, "Color": "#8EEDB5", "Bold": true },
+        { "Id": "11111111-1111-4111-8111-111111111113", "Name": "Часы", "Type": "Clock", "X": 18, "Y": 80, "FontSize": 54, "Color": "#FFFFFF", "Bold": true },
+        { "Id": "11111111-1111-4111-8111-111111111114", "Name": "Дата", "Type": "Date", "X": 18, "Y": 172, "FontSize": 16, "Color": "#A4B9C3" }
+      ]
+    },
+    {
+      "Id": "22222222-2222-4222-8222-222222222221",
+      "Name": "Моя надпись",
+      "DurationSeconds": 8,
+      "Enabled": true,
+      "Background": "#294D8D",
+      "Layers": [
+        { "Id": "22222222-2222-4222-8222-222222222222", "Name": "Заголовок", "Type": "Text", "Text": "Привет!", "X": 24, "Y": 65, "FontSize": 38, "Color": "#FFFFFF", "Bold": true },
+        { "Id": "22222222-2222-4222-8222-222222222223", "Name": "Описание", "Type": "Text", "Text": "Мой экран\nна 8 секунд", "X": 24, "Y": 128, "FontSize": 22, "Color": "#FFF2B8" }
+      ]
+    },
+    {
+      "Id": "33333333-3333-4333-8333-333333333331",
+      "Name": "Проверка цветов",
+      "DurationSeconds": 3,
+      "Enabled": false,
+      "Background": "#101C22",
+      "Layers": [
+        { "Id": "33333333-3333-4333-8333-333333333332", "Name": "Тест цветов", "Type": "Calibration", "X": 0, "Y": 0, "Width": 240, "Height": 240, "Color": "#8EEDB5" }
+      ]
+    }
+  ]
+}

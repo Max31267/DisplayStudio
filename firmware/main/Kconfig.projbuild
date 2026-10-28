@@ -1,0 +1,56 @@
+menu "Mini Display ST7789"
+    config MD_PIN_SCLK
+        int "SPI SCLK GPIO"
+        range 0 10
+        default 4
+    config MD_PIN_MOSI
+        int "SPI MOSI GPIO"
+        range 0 10
+        default 6
+    config MD_PIN_CS
+        int "CS GPIO (-1 if panel has no CS)"
+        range -1 10
+        default 7
+    config MD_PIN_DC
+        int "DC GPIO"
+        range 0 10
+        default 1
+    config MD_PIN_RST
+        int "RESET GPIO (-1 if unused)"
+        range -1 10
+        default 3
+    config MD_PIN_BL
+        int "Backlight enable GPIO (-1: external wiring)"
+        range -1 10
+        default -1
+    config MD_BL_ACTIVE_HIGH
+        bool "Backlight enable is active high"
+        default y
+    config MD_SPI_MHZ
+        int "SPI clock MHz"
+        range 1 40
+        default 20
+    config MD_GAP_X
+        int "Panel X gap"
+        range 0 80
+        default 0
+    config MD_GAP_Y
+        int "Panel Y gap"
+        range 0 80
+        default 0
+    config MD_BGR
+        bool "Use BGR color order"
+        default n
+    config MD_INVERT
+        bool "Invert panel colors"
+        default y
+    config MD_SWAP_XY
+        bool "Swap X and Y"
+        default n
+    config MD_MIRROR_X
+        bool "Mirror X"
+        default n
+    config MD_MIRROR_Y
+        bool "Mirror Y"
+        default n
+endmenu

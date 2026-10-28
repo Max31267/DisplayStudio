@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MiniDisplay.Core/MiniDisplay.Core.csproj" />
+    <Project Path="src/MiniDisplay.Windows/MiniDisplay.Windows.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MiniDisplay.Tests/MiniDisplay.Tests.csproj" />
+    <Project Path="tests/MiniDisplay.Rendering.Tests/MiniDisplay.Rendering.Tests.csproj" />
+  </Folder>
+</Solution>

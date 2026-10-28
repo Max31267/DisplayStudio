@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>MiniDisplay</AssemblyName>
+    <Version>0.4.0</Version>
+    <Product>Display Studio</Product>
+    <Description>Редактор мини-дисплея для Windows и ESP32-C3</Description>
+    <ApplicationIcon>Assets/App.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <Resource Include="Assets/App.ico" />
+    <Content Include="../../docs/third-party.md" Link="THIRD-PARTY.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="../../docs/licenses/*" Link="licenses/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <ProjectReference Include="../MiniDisplay.Core/MiniDisplay.Core.csproj" />
+    <PackageReference Include="SkiaSharp" Version="4.153.1" />
+    <PackageReference Include="System.IO.Ports" Version="10.0.3" />
+    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
+  </ItemGroup>
+</Project>

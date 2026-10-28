@@ -1,0 +1,15 @@
+.tools/
+**/bin/
+**/obj/
+artifacts/
+firmware/build*/
+firmware/binaries/
+firmware/managed_components/
+firmware/sdkconfig
+firmware/sdkconfig.old
+firmware/sdkconfig.*
+!firmware/sdkconfig.defaults
+**/__pycache__/
+.vs/
+*.user
+*.log

@@ -1,0 +1,8 @@
+{
+  "Version": 1,
+  "Title": "МОЙ ДИСПЛЕЙ",
+  "Accent": "#8EEDB5",
+  "Background": "#101C22",
+  "FramesPerSecond": 20,
+  "AutoRotate": true
+}

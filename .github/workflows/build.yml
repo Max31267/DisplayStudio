@@ -1,0 +1,36 @@
+name: Build and test
+on: [push, pull_request]
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet build MiniDisplay.slnx -c Release
+      - run: dotnet run --project tests/MiniDisplay.Tests -c Release --no-build
+      - run: dotnet run --project tests/MiniDisplay.Rendering.Tests -c Release --no-build
+  firmware-core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: cc -std=c11 -Wall -Wextra -Werror -Ifirmware/portable firmware/portable/md_protocol.c firmware/portable/md_device.c tests/firmware/test_device.c -o /tmp/md-device-tests
+      - run: /tmp/md-device-tests
+      - run: dotnet run --project tests/MiniDisplay.Tests -c Release
+        env:
+          MD_NATIVE_BRIDGE: /tmp/md-device-tests
+  esp32c3:
+    runs-on: ubuntu-latest
+    container: espressif/idf:v5.5
+    steps:
+      - uses: actions/checkout@v4
+      - shell: bash
+        working-directory: firmware
+        run: |
+          . "$IDF_PATH/export.sh"
+          idf.py set-target esp32c3
+          idf.py build
