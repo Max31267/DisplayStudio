@@ -11,6 +11,19 @@
     <SolidColorBrush x:Key="Muted" Color="#748198" />
     <SolidColorBrush x:Key="Accent" Color="#315FFF" />
     <SolidColorBrush x:Key="Danger" Color="#C83A54" />
+    <Style x:Key="BrightnessSlider" TargetType="Slider">
+      <Setter Property="MinHeight" Value="32" /><Setter Property="Focusable" Value="True" />
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Slider">
+        <Grid x:Name="SliderSurface" Background="Transparent">
+          <Track x:Name="PART_Track" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}" Value="{TemplateBinding Value}" IsDirectionReversed="{TemplateBinding IsDirectionReversed}">
+            <Track.DecreaseRepeatButton><RepeatButton Command="{x:Static Slider.DecreaseLarge}" IsTabStop="False"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Height="6" CornerRadius="3" Background="{StaticResource Accent}" VerticalAlignment="Center" /></ControlTemplate></RepeatButton.Template></RepeatButton></Track.DecreaseRepeatButton>
+            <Track.Thumb><Thumb Width="18" Height="18"><Thumb.Template><ControlTemplate TargetType="Thumb"><Border CornerRadius="9" Background="White" BorderBrush="{StaticResource Accent}" BorderThickness="3" /></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
+            <Track.IncreaseRepeatButton><RepeatButton Command="{x:Static Slider.IncreaseLarge}" IsTabStop="False"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Height="6" CornerRadius="3" Background="{StaticResource Stroke}" VerticalAlignment="Center" /></ControlTemplate></RepeatButton.Template></RepeatButton></Track.IncreaseRepeatButton>
+          </Track>
+        </Grid>
+        <ControlTemplate.Triggers><Trigger Property="IsEnabled" Value="False"><Setter TargetName="SliderSurface" Property="Opacity" Value="0.4" /></Trigger></ControlTemplate.Triggers>
+      </ControlTemplate></Setter.Value></Setter>
+    </Style>
     <DrawingBrush x:Key="CanvasPattern" TileMode="Tile" Viewport="0,0,20,20" ViewportUnits="Absolute">
       <DrawingBrush.Drawing><DrawingGroup>
         <GeometryDrawing Brush="#F8FAFE"><GeometryDrawing.Geometry><RectangleGeometry Rect="0,0,20,20" /></GeometryDrawing.Geometry></GeometryDrawing>

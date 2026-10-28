@@ -24,6 +24,8 @@ var tests = new List<(string Name, Func<Task> Run)>
     ("CRC corruption, boot noise and oversize recovery", () => Sync(Corruption)),
     ("Tile merging, limits and acknowledged baseline", () => Sync(Differences)),
     ("Full frame, delta and unchanged frame round trip", RoundTrip),
+    ("Brightness ACK, range, reconnect and legacy capability fallback", BacklightControl),
+    ("Invalid brightness commands never change level or pixels", () => Sync(InvalidBrightness)),
     ("Damaged frame requests resynchronization", Resynchronization),
     ("Lost acknowledgement never commits baseline", LostAck),
     ("Reject out-of-order, out-of-bounds and incomplete frames", () => Sync(InvalidFrames)),
@@ -323,6 +325,63 @@ static async Task RoundTrip()
     await session.SendFrameAsync(frame, default); Same(frame, link.Device.Pixels);
     Check(session.BytesSent - before < 1024, "Single tile should use less than 1 KiB");
 }
+static async Task BacklightControl()
+{
+    var link = new EmulatorLink(); await using var session = new DisplaySession(link);
+    await session.ConnectAsync(default); Check(session.Capabilities!.SupportsBrightness);
+    var frame = new byte[FrameDiffer.FrameBytes]; new Random(65).NextBytes(frame);
+    await session.SendFrameAsync(frame, default);
+    foreach (int percent in new[] { 0, 1, 37, 100, 80 })
+    {
+        Check(await session.SetBrightnessAsync(percent, default)); Equal(percent, link.Device.BrightnessPercent);
+        Same(frame, link.Device.Pixels); Check(!await session.SendFrameAsync(frame, default));
+    }
+    long before = session.BytesSent;
+    foreach (int percent in new[] { -1, 101, int.MaxValue })
+    {
+        try { await session.SetBrightnessAsync(percent, default); throw new Exception("Bad brightness accepted"); }
+        catch (ArgumentOutOfRangeException) { }
+    }
+    Equal(before, session.BytesSent);
+    await session.ConnectAsync(default); Equal(80, link.Device.BrightnessPercent);
+    await session.SetBrightnessAsync(42, default); Equal(42, link.Device.BrightnessPercent);
+    await session.SendFrameAsync(frame, default); Same(frame, link.Device.Pixels);
+    foreach (var device in new[] { new DeviceEmulator { SupportsExtendedHello = false }, new DeviceEmulator { SupportsBacklight = false } })
+    {
+        await using var legacy = new DisplaySession(new EmulatorLink { Device = device });
+        await legacy.ConnectAsync(default); Check(!legacy.Capabilities!.SupportsBrightness);
+        long bytes = legacy.BytesSent;
+        Check(!await legacy.SetBrightnessAsync(5, default)); Equal(bytes, legacy.BytesSent);
+        await legacy.SendFrameAsync(frame, default); Same(frame, device.Pixels);
+    }
+    await using var offline = new DisplaySession(new EmulatorLink());
+    try { await offline.SetBrightnessAsync(50, default); throw new Exception("Offline brightness accepted"); }
+    catch (InvalidOperationException) { }
+}
+
+static void InvalidBrightness()
+{
+    var device = new DeviceEmulator(); var decoder = new PacketDecoder();
+    Packet Send(MessageType type, uint seq, byte[] body) => decoder.Feed(device.Receive(Wire.Encode(new Packet(type, seq, body)))).Single();
+    var caps = Send(MessageType.Hello, 0, [1]);
+    Check(DeviceCapabilities.Parse(caps.Payload).SupportsBrightness);
+    Check(Send(MessageType.SetBrightness, 1, [0]).Type == MessageType.Ack);
+    foreach (var body in new byte[][] { [], [101], [255], [50, 0] })
+    {
+        Send(MessageType.Hello, 100, [1]);
+        Check(Send(MessageType.SetBrightness, 101, body).Type == MessageType.RequestFull);
+        Equal(0, device.BrightnessPercent);
+    }
+    Send(MessageType.Hello, 200, [1]);
+    Check(Send(MessageType.SetBrightness, 202, [80]).Type == MessageType.RequestFull); Equal(0, device.BrightnessPercent);
+    Send(MessageType.Hello, 300, [1]); Send(MessageType.FrameBegin, 301, [1, 0, 0, 0, 1]);
+    Check(Send(MessageType.SetBrightness, 302, [80]).Type == MessageType.RequestFull); Equal(0, device.BrightnessPercent);
+    Send(MessageType.Hello, 400, [1]);
+    var corrupt = Wire.Encode(new Packet(MessageType.SetBrightness, 401, [80])); corrupt[^1] ^= 1;
+    device.Receive(corrupt); Equal(0, device.BrightnessPercent); Check(device.Pixels.All(value => value == 0));
+    Check(!DeviceCapabilities.Parse(Send(MessageType.Hello, 500, []).Payload).SupportsBrightness);
+}
+
 static async Task Resynchronization()
 {
     var link = new EmulatorLink(); await using var session = new DisplaySession(link);
@@ -475,6 +534,8 @@ static async Task NativeRoundTrip()
         {
             await session.ConnectAsync(default);
             var random = new Random(18); random.NextBytes(frame);
+            Check(session.Capabilities!.SupportsBrightness);
+            Check(await session.SetBrightnessAsync(0, default));
             await session.SendFrameAsync(frame, default);
             for (int i = 0; i < 100; i++)
             {
@@ -485,6 +546,7 @@ static async Task NativeRoundTrip()
             try { await session.SendFrameAsync(frame, default); throw new Exception("Native receiver accepted bad CRC"); }
             catch (FullFrameRequiredException) { }
             await session.ConnectAsync(default);
+            Check(await session.SetBrightnessAsync(37, default));
             await session.SendFrameAsync(frame, default);
         }
         Same(frame, File.ReadAllBytes(dump));

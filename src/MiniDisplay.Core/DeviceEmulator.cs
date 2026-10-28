@@ -18,6 +18,10 @@ public sealed class DeviceEmulator
     public int CommittedFrames { get; private set; }
     public uint? LastFrameId { get; private set; }
     public int RejectedPackets => decoder.RejectedPackets;
+    public bool SupportsExtendedHello { get; init; } = true;
+    public bool SupportsBacklight { get; init; } = true;
+    private int brightnessPercent = 80;
+    public int BrightnessPercent => Volatile.Read(ref brightnessPercent);
 
     public byte[] Receive(ReadOnlySpan<byte> bytes)
     {
@@ -32,15 +36,17 @@ public sealed class DeviceEmulator
 
     private Packet Handle(Packet packet)
     {
-        if (packet.Type == MessageType.Hello && packet.Payload.Length == 0)
+        bool extended = SupportsExtendedHello && packet.Payload is [1];
+        if (packet.Type == MessageType.Hello && (packet.Payload.Length == 0 || extended))
         {
             connected = true; expectedSequence = unchecked(packet.Sequence + 1);
             frameOpen = false; needsFull = true;
-            var caps = new byte[10];
+            var caps = new byte[extended ? 14 : 10];
             BinaryPrimitives.WriteUInt16LittleEndian(caps, Wire.Width);
             BinaryPrimitives.WriteUInt16LittleEndian(caps.AsSpan(2), Wire.Height);
             BinaryPrimitives.WriteUInt16LittleEndian(caps.AsSpan(4), Wire.MaxPayload);
             BinaryPrimitives.WriteUInt32LittleEndian(caps.AsSpan(6), 160 * 1024);
+            if (extended) BinaryPrimitives.WriteUInt32LittleEndian(caps.AsSpan(10), SupportsBacklight ? (uint)DeviceFeatures.Backlight : 0);
             return new Packet(MessageType.Capabilities, packet.Sequence, caps);
         }
         if (!connected || packet.Sequence != expectedSequence) return Reject(packet);
@@ -72,6 +78,10 @@ public sealed class DeviceEmulator
                 break;
             case MessageType.TimeSync: valid = !frameOpen && body.Length == 8; break;
             case MessageType.Ping: valid = !frameOpen && body.Length == 0; break;
+            case MessageType.SetBrightness:
+                valid = SupportsBacklight && !frameOpen && body.Length == 1 && body[0] <= 100;
+                if (valid) Volatile.Write(ref brightnessPercent, body[0]);
+                break;
             default: valid = false; break;
         }
         return valid ? new Packet(MessageType.Ack, packet.Sequence, []) : Reject(packet);
@@ -108,7 +118,7 @@ public interface IDeviceLink : IAsyncDisposable
 public sealed class EmulatorLink : IDeviceLink
 {
     private readonly Channel<byte[]> replies = Channel.CreateUnbounded<byte[]>();
-    public DeviceEmulator Device { get; } = new();
+    public DeviceEmulator Device { get; init; } = new();
     private int corruptNextWrite;
     private int disconnected;
     public bool CorruptNextWrite { get => Volatile.Read(ref corruptNextWrite) != 0; set => Volatile.Write(ref corruptNextWrite, value ? 1 : 0); }

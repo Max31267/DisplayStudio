@@ -49,6 +49,7 @@ public partial class MainWindow
         if(firmwareBusy) { ShowError("Дождитесь завершения прошивки или прервите её в настройках."); return; }
         if (!ConfirmSaveChanges()) return;
         if(currentProjectPath is not null) RememberProject(currentProjectPath);
+        PersistBrightness();
         exiting = true; Close();
     }
     private void SaveProjectAs(object sender, RoutedEventArgs e) => SaveDocument(true);

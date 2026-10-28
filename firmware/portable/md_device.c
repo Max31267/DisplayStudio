@@ -3,7 +3,7 @@
 
 static void reply(md_device *d, uint8_t type, uint32_t sequence, const uint8_t *body, uint16_t length)
 {
-    uint8_t buffer[MD_HEADER + 10];
+    uint8_t buffer[MD_HEADER + 14];
     size_t size = md_encode(buffer, sizeof(buffer), type, sequence, body, length);
     d->send(d->ctx, buffer, size);
 }
@@ -15,10 +15,10 @@ static bool reject(md_device *d, uint32_t sequence)
     return false;
 }
 
-void md_device_init(md_device *d, md_draw_fn draw, md_send_fn send, md_time_fn time, md_heap_fn heap, void *ctx)
+void md_device_init(md_device *d, md_draw_fn draw, md_send_fn send, md_time_fn time, md_heap_fn heap, md_brightness_fn brightness, void *ctx)
 {
     memset(d, 0, sizeof(*d)); d->needs_full = true;
-    d->draw = draw; d->send = send; d->time = time; d->heap = heap; d->ctx = ctx;
+    d->draw = draw; d->send = send; d->time = time; d->heap = heap; d->brightness = brightness; d->ctx = ctx;
 }
 
 void md_device_corruption(md_device *d) { (void)reject(d, d->expected_sequence); }
@@ -38,12 +38,14 @@ static bool draw(md_device *d, const md_packet *p)
 
 bool md_device_handle(md_device *d, const md_packet *p)
 {
-    if (p->type == MD_HELLO && p->length == 0) {
+    bool extended = p->length == 1 && p->payload[0] == 1;
+    if (p->type == MD_HELLO && (p->length == 0 || extended)) {
         d->connected = true; d->expected_sequence = p->sequence + 1u;
         d->frame_open = false; d->needs_full = true;
-        uint8_t caps[10]; md_put16(caps, MD_WIDTH); md_put16(caps + 2, MD_HEIGHT);
+        uint8_t caps[14]; md_put16(caps, MD_WIDTH); md_put16(caps + 2, MD_HEIGHT);
         md_put16(caps + 4, MD_MAX_PAYLOAD); md_put32(caps + 6, d->heap(d->ctx));
-        reply(d, MD_CAPABILITIES, p->sequence, caps, sizeof(caps)); return true;
+        md_put32(caps + 10, d->brightness ? 1u : 0u);
+        reply(d, MD_CAPABILITIES, p->sequence, caps, extended ? 14 : 10); return true;
     }
     if (!d->connected || p->sequence != d->expected_sequence) return reject(d, p->sequence);
     ++d->expected_sequence;
@@ -67,6 +69,10 @@ bool md_device_handle(md_device *d, const md_packet *p)
         if (valid) d->time(d->ctx, (uint64_t)md_u32(p->payload) | ((uint64_t)md_u32(p->payload + 4) << 32));
         break;
     case MD_PING: valid = !d->frame_open && p->length == 0; break;
+    case MD_SET_BRIGHTNESS:
+        valid = !d->frame_open && p->length == 1 && p->payload[0] <= 100 && d->brightness;
+        if (valid) valid = d->brightness(d->ctx, p->payload[0]);
+        break;
     default: break;
     }
     if (!valid) return reject(d, p->sequence);

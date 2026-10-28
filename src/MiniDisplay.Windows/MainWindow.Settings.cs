@@ -27,7 +27,7 @@ public partial class MainWindow
         var root=new StackPanel { MaxWidth=950,Margin=new Thickness(28),HorizontalAlignment=HorizontalAlignment.Center };
         SettingsScreen.Children.Add(new ScrollViewer { Content=root,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled });
         root.Children.Add(new TextBlock { Text="Настройки",FontSize=24,FontWeight=FontWeights.SemiBold });
-        root.Children.Add(Hint("Display Studio 0.4.0 · параметры этого компьютера"));
+        root.Children.Add(Hint("Display Studio 0.4.1 · параметры этого компьютера"));
         StackPanel Card(string title)
         { var panel=new StackPanel(); panel.Children.Add(Heading(title)); root.Children.Add(new Border { Child=panel,Background=Brushes.White,BorderBrush=(Brush)FindResource("Stroke"),BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(9),Padding=new Thickness(22),Margin=new Thickness(0,10,0,8) }); return panel; }
         var startup=Card("Запуск программы");

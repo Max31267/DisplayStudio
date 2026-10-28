@@ -6,7 +6,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>disable</ImplicitUsings>
     <AssemblyName>MiniDisplay</AssemblyName>
-    <Version>0.4.0</Version>
+    <Version>0.4.1</Version>
     <Product>Display Studio</Product>
     <Description>Редактор мини-дисплея для Windows и ESP32-C3</Description>
     <ApplicationIcon>Assets/App.ico</ApplicationIcon>

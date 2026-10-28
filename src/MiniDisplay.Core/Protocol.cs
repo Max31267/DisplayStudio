@@ -5,7 +5,7 @@ namespace MiniDisplay.Core;
 public enum MessageType : byte
 {
     Hello = 1, Capabilities = 2, FrameBegin = 3, Pixels = 4, FrameEnd = 5,
-    Ack = 6, RequestFull = 7, TimeSync = 8, Ping = 9
+    Ack = 6, RequestFull = 7, TimeSync = 8, Ping = 9, SetBrightness = 10
 }
 
 public sealed record Packet(MessageType Type, uint Sequence, byte[] Payload);
@@ -95,15 +95,20 @@ public sealed class PacketDecoder
     }
 }
 
-public sealed record DeviceCapabilities(ushort Width, ushort Height, ushort MaxPayload, uint FreeHeap)
+[Flags]
+public enum DeviceFeatures : uint { None = 0, Backlight = 1 }
+
+public sealed record DeviceCapabilities(ushort Width, ushort Height, ushort MaxPayload, uint FreeHeap, DeviceFeatures Features = DeviceFeatures.None)
 {
+    public bool SupportsBrightness => (Features & DeviceFeatures.Backlight) != 0;
     public static DeviceCapabilities Parse(byte[] payload)
     {
-        if (payload.Length != 10) throw new InvalidDataException("Некорректный ответ устройства.");
+        if (payload.Length is not (10 or 14)) throw new InvalidDataException("Некорректный ответ устройства.");
         var caps = new DeviceCapabilities(BinaryPrimitives.ReadUInt16LittleEndian(payload),
             BinaryPrimitives.ReadUInt16LittleEndian(payload.AsSpan(2)),
             BinaryPrimitives.ReadUInt16LittleEndian(payload.AsSpan(4)),
-            BinaryPrimitives.ReadUInt32LittleEndian(payload.AsSpan(6)));
+            BinaryPrimitives.ReadUInt32LittleEndian(payload.AsSpan(6)),
+            payload.Length == 14 ? (DeviceFeatures)BinaryPrimitives.ReadUInt32LittleEndian(payload.AsSpan(10)) : DeviceFeatures.None);
         if (caps.Width != Wire.Width || caps.Height != Wire.Height || caps.MaxPayload < 520)
             throw new InvalidDataException("Устройство не поддерживает экран 240×240 и блоки 16×16.");
         return caps;

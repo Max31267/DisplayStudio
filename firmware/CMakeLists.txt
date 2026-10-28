@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-set(PROJECT_VER "0.4.0")
+set(PROJECT_VER "0.4.1")
 set(COMPONENTS main)
 set_property(GLOBAL PROPERTY JOB_POOLS compile_pool=4)
 set(CMAKE_JOB_POOL_COMPILE compile_pool)

@@ -9,14 +9,17 @@
 #include <unistd.h>
 #endif
 #include "md_device.h"
+#include "md_backlight.h"
 
 static md_device device;
 static md_parser parser;
 static uint8_t pixels[MD_WIDTH * MD_HEIGHT * 2]; // Mock LCD RAM; never linked into ESP32 firmware.
-static uint8_t last_reply[MD_HEADER + 10];
+static uint8_t last_reply[MD_HEADER + 14];
 static size_t last_reply_size;
 static bool bridge;
 static uint64_t synced_time;
+static uint8_t brightness = 80;
+static bool fail_brightness;
 
 static bool draw(void *ctx, int x, int y, int w, int h, const uint8_t *data)
 {
@@ -33,6 +36,7 @@ static void send_reply(void *ctx, const uint8_t *data, size_t length)
 }
 static void time_sync(void *ctx, uint64_t seconds) { (void)ctx; synced_time = seconds; }
 static uint32_t heap(void *ctx) { (void)ctx; return 123456; }
+static bool set_brightness(void *ctx, uint8_t value) { (void)ctx; if (fail_brightness) return false; brightness = value; return true; }
 static void packet(void *ctx, const md_packet *p) { (void)ctx; (void)md_device_handle(&device, p); }
 static void error(void *ctx) { (void)ctx; md_device_corruption(&device); }
 
@@ -49,7 +53,7 @@ static void send_packet(uint8_t type, uint32_t seq, const uint8_t *body, uint16_
 
 int main(int argc, char **argv)
 {
-    md_device_init(&device, draw, send_reply, time_sync, heap, NULL);
+    md_device_init(&device, draw, send_reply, time_sync, heap, set_brightness, NULL);
     if (argc == 3 && strcmp(argv[1], "--bridge") == 0) {
         bridge = true;
 #ifdef _WIN32
@@ -113,6 +117,38 @@ int main(int argc, char **argv)
     assert(parser.rejected == 1 && last_reply[5] == MD_REQUEST_FULL);
     send_packet(MD_HELLO, 300, NULL, 0); assert(last_reply[5] == MD_CAPABILITIES);
     md_device_disconnect(&device); assert(!device.connected && device.needs_full);
-    puts("PASS  firmware CRC, fragmentation, full coverage, pixels, sequence, bounds, corruption and reconnect");
+    uint8_t extended[] = {1};
+    send_packet(MD_HELLO, 400, extended, sizeof(extended));
+    assert(md_u16(last_reply + 6) == 14 && md_u32(last_reply + MD_HEADER + 10) == 1);
+    before = md_crc32(pixels, sizeof(pixels), NULL, 0);
+    uint8_t value = 0;
+    send_packet(MD_SET_BRIGHTNESS, 401, &value, 1); assert(last_reply[5] == MD_ACK && brightness == 0);
+    value = 100;
+    send_packet(MD_SET_BRIGHTNESS, 402, &value, 1); assert(last_reply[5] == MD_ACK && brightness == 100);
+    value = 101;
+    send_packet(MD_SET_BRIGHTNESS, 403, &value, 1); assert(last_reply[5] == MD_REQUEST_FULL && brightness == 100);
+    send_packet(MD_SET_BRIGHTNESS, 404, NULL, 0); assert(last_reply[5] == MD_REQUEST_FULL && brightness == 100);
+    uint8_t extra[] = {25, 30};
+    send_packet(MD_SET_BRIGHTNESS, 405, extra, 2); assert(last_reply[5] == MD_REQUEST_FULL && brightness == 100);
+    value = 50;
+    send_packet(MD_SET_BRIGHTNESS, 407, &value, 1); assert(last_reply[5] == MD_REQUEST_FULL && brightness == 100);
+    send_packet(MD_HELLO, 500, extended, 1);
+    begin[4] = 1; send_packet(MD_FRAME_BEGIN, 501, begin, sizeof(begin));
+    send_packet(MD_SET_BRIGHTNESS, 502, &value, 1); assert(last_reply[5] == MD_REQUEST_FULL && brightness == 100);
+    send_packet(MD_HELLO, 600, extended, 1);
+    fail_brightness = true;
+    send_packet(MD_SET_BRIGHTNESS, 601, &value, 1); assert(last_reply[5] == MD_REQUEST_FULL && brightness == 100);
+    fail_brightness = false;
+    send_packet(MD_HELLO, 700, NULL, 0); assert(md_u16(last_reply + 6) == 10);
+    send_packet(MD_SET_BRIGHTNESS, 701, &value, 1); assert(last_reply[5] == MD_ACK && brightness == 50);
+    md_device_disconnect(&device); assert(brightness == 50);
+    assert(md_crc32(pixels, sizeof(pixels), NULL, 0) == before);
+    md_device_init(&device, draw, send_reply, time_sync, heap, NULL, NULL);
+    send_packet(MD_HELLO, 800, extended, 1); assert(md_u32(last_reply + MD_HEADER + 10) == 0);
+    send_packet(MD_SET_BRIGHTNESS, 801, &value, 1); assert(last_reply[5] == MD_REQUEST_FULL && brightness == 50);
+    assert(md_backlight_duty(0) == 0 && md_backlight_duty(50) == 512 && md_backlight_duty(100) == MD_BACKLIGHT_DUTY_MAX);
+    assert(md_backlight_duty(255) == MD_BACKLIGHT_DUTY_MAX);
+    for (int i = 1; i <= 100; ++i) assert(md_backlight_duty((uint8_t)i) > md_backlight_duty((uint8_t)(i - 1)));
+    puts("PASS  firmware protocol, backlight bounds/sequence/ACK, capability negotiation, PWM endpoints and unchanged pixels");
     return 0;
 }

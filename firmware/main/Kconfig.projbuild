@@ -20,12 +20,16 @@ menu "Mini Display ST7789"
         range -1 10
         default 3
     config MD_PIN_BL
-        int "Backlight enable GPIO (-1: external wiring)"
+        int "Backlight PWM GPIO (-1: disabled)"
         range -1 10
-        default -1
+        default 5
     config MD_BL_ACTIVE_HIGH
-        bool "Backlight enable is active high"
+        bool "Backlight PWM is active high"
         default y
+    config MD_BL_DEFAULT_PERCENT
+        int "Initial brightness (before a saved value exists)"
+        range 0 100
+        default 80
     config MD_SPI_MHZ
         int "SPI clock MHz"
         range 1 40

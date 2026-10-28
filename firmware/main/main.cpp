@@ -1,6 +1,7 @@
 #include <cstring>
 #include "sdkconfig.h"
 #include "driver/gpio.h"
+#include "driver/ledc.h"
 #include "driver/spi_master.h"
 #include "driver/usb_serial_jtag.h"
 #include "esp_heap_caps.h"
@@ -9,10 +10,14 @@
 #include "esp_lcd_panel_vendor.h"
 #include "esp_system.h"
 #include "esp_timer.h"
+#include "esp_log.h"
+#include "nvs_flash.h"
+#include "nvs.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 extern "C" {
 #include "md_device.h"
+#include "md_backlight.h"
 }
 
 static esp_lcd_panel_handle_t panel;
@@ -24,6 +29,63 @@ static int64_t last_activity;
 static int64_t sync_at;
 static uint64_t local_seconds;
 static bool synchronized;
+static nvs_handle_t backlight_store;
+static bool backlight_store_open;
+static uint8_t backlight_percent = CONFIG_MD_BL_DEFAULT_PERCENT;
+static uint8_t persisted_brightness = CONFIG_MD_BL_DEFAULT_PERCENT;
+static int64_t persist_after;
+
+static_assert(CONFIG_MD_PIN_BL < 0 || (CONFIG_MD_PIN_BL != CONFIG_MD_PIN_SCLK &&
+    CONFIG_MD_PIN_BL != CONFIG_MD_PIN_MOSI && CONFIG_MD_PIN_BL != CONFIG_MD_PIN_CS &&
+    CONFIG_MD_PIN_BL != CONFIG_MD_PIN_DC && CONFIG_MD_PIN_BL != CONFIG_MD_PIN_RST &&
+    CONFIG_MD_PIN_BL != 2 && CONFIG_MD_PIN_BL != 8 && CONFIG_MD_PIN_BL != 9),
+    "Backlight GPIO must be free and must not be a boot strapping pin");
+
+static void initialize_backlight()
+{
+    if (CONFIG_MD_PIN_BL < 0) return;
+    ledc_timer_config_t timer = {};
+    timer.speed_mode = LEDC_LOW_SPEED_MODE; timer.timer_num = LEDC_TIMER_0;
+    timer.duty_resolution = LEDC_TIMER_10_BIT; timer.freq_hz = MD_BACKLIGHT_PWM_HZ;
+    timer.clk_cfg = LEDC_USE_XTAL_CLK;
+    ESP_ERROR_CHECK(ledc_timer_config(&timer));
+    ledc_channel_config_t channel = {};
+    channel.gpio_num = CONFIG_MD_PIN_BL; channel.speed_mode = LEDC_LOW_SPEED_MODE;
+    channel.channel = LEDC_CHANNEL_0; channel.timer_sel = LEDC_TIMER_0;
+    channel.duty = 0; channel.hpoint = 0;
+#ifndef CONFIG_MD_BL_ACTIVE_HIGH
+    channel.flags.output_invert = 1;
+#endif
+    ESP_ERROR_CHECK(ledc_channel_config(&channel));
+    // A damaged/full NVS must not prevent USB or the display from working.
+    if (nvs_flash_init() == ESP_OK && nvs_open("display", NVS_READWRITE, &backlight_store) == ESP_OK) {
+        backlight_store_open = true;
+        uint8_t saved;
+        if (nvs_get_u8(backlight_store, "brightness", &saved) == ESP_OK && saved <= 100) backlight_percent = saved;
+    }
+    persisted_brightness = backlight_percent;
+}
+
+static bool set_brightness(void *, uint8_t percent)
+{
+    if (CONFIG_MD_PIN_BL < 0 || percent > 100) return false;
+    if (ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, md_backlight_duty(percent)) != ESP_OK ||
+        ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0) != ESP_OK) return false;
+    if (backlight_percent != percent) {
+        backlight_percent = percent;
+        persist_after = esp_timer_get_time() + 2000000;
+    }
+    return true;
+}
+
+static void persist_brightness(int64_t now)
+{
+    if (!backlight_store_open || backlight_percent == persisted_brightness || now < persist_after) return;
+    if (nvs_set_u8(backlight_store, "brightness", backlight_percent) == ESP_OK && nvs_commit(backlight_store) == ESP_OK)
+        persisted_brightness = backlight_percent;
+    else ESP_LOGW("backlight", "Could not save brightness; keeping current PWM in RAM");
+    persist_after = now + 5000000;
+}
 
 static bool IRAM_ATTR on_transfer(esp_lcd_panel_io_handle_t, esp_lcd_panel_io_event_data_t *, void *)
 {
@@ -142,29 +204,24 @@ static void initialize_panel()
     ESP_ERROR_CHECK(esp_lcd_panel_invert_color(panel, true));
 #endif
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel, true));
-    if (CONFIG_MD_PIN_BL >= 0) {
-        ESP_ERROR_CHECK(gpio_set_direction(static_cast<gpio_num_t>(CONFIG_MD_PIN_BL), GPIO_MODE_OUTPUT));
-#ifdef CONFIG_MD_BL_ACTIVE_HIGH
-        ESP_ERROR_CHECK(gpio_set_level(static_cast<gpio_num_t>(CONFIG_MD_PIN_BL), 1));
-#else
-        ESP_ERROR_CHECK(gpio_set_level(static_cast<gpio_num_t>(CONFIG_MD_PIN_BL), 0));
-#endif
-    }
 }
 
 extern "C" void app_main()
 {
+    initialize_backlight();
     initialize_panel();
     usb_serial_jtag_driver_config_t usb = { .tx_buffer_size = 1024, .rx_buffer_size = 16384 };
     ESP_ERROR_CHECK(usb_serial_jtag_driver_install(&usb));
-    md_device_init(&device, draw_pixels, send_bytes, set_time, free_heap, nullptr);
+    md_device_init(&device, draw_pixels, send_bytes, set_time, free_heap, CONFIG_MD_PIN_BL >= 0 ? set_brightness : nullptr, nullptr);
     fallback_clock();
+    if (CONFIG_MD_PIN_BL >= 0) ESP_ERROR_CHECK(set_brightness(nullptr, backlight_percent) ? ESP_OK : ESP_FAIL);
     uint8_t incoming[512];
     int64_t last_fallback_second = -1;
     while (true) {
         int n = usb_serial_jtag_read_bytes(incoming, sizeof(incoming), pdMS_TO_TICKS(25));
         if (n > 0) md_parser_feed(&parser, incoming, static_cast<size_t>(n), packet_received, packet_error, nullptr);
         int64_t now = esp_timer_get_time();
+        persist_brightness(now);
         if (now - last_activity > 5000000) {
             if (device.connected) { md_device_disconnect(&device); parser.count = 0; }
             if (now / 1000000 != last_fallback_second) {

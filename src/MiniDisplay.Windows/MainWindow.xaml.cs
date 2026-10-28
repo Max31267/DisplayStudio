@@ -43,6 +43,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         InitializeFeatures();
         InitializeSettings();
+        InitializeBacklight();
         Preview.Source = playbackSurface.Source; EditorPreview.Source = editorSurface.Source;
         using(var icon=System.Windows.Application.GetResourceStream(new Uri("Assets/App.ico",UriKind.Relative))!.Stream) trayIcon=new System.Drawing.Icon(icon);
         tray = new Forms.NotifyIcon { Text = "Display Studio", Icon = trayIcon, Visible = true };
@@ -153,6 +154,8 @@ public partial class MainWindow : Window
         bool simulated = selected.StartsWith("Эмулятор", StringComparison.Ordinal);
         emulator = simulated ? new EmulatorLink() : null;
         DevicePreview.Source = null;
+        EmulatorBacklightShade.Visibility = Visibility.Collapsed;
+        UpdateBacklightState(null);
         ReceiverLabel.Text = simulated ? "Принято эмулятором" : "Результат — на панели устройства";
         connectionCancellation = new CancellationTokenSource();
         Ports.IsEnabled = RefreshPortsButton.IsEnabled = false; ConnectButton.Content = "Отключить";
@@ -168,6 +171,7 @@ public partial class MainWindow : Window
         ConnectButton.Content="Подключить"; ConnectButton.IsEnabled=!firmwareBusy;
         Ports.IsEnabled=RefreshPortsButton.IsEnabled=!firmwareBusy; CorruptButton.IsEnabled=BreakButton.IsEnabled=false;
         SetConnectionBadge("Не подключён",false); Stats.Text="Передача остановлена"; ReceiverLabel.Text="Последнее принятое изображение";
+        UpdateBacklightState(null);
     }
 
     private async Task RunConnectionAsync(string selected, CancellationToken token)
@@ -189,17 +193,25 @@ public partial class MainWindow : Window
                     else link = new SerialDeviceLink(selected);
                     await using var session = new DisplaySession(link);
                     await session.ConnectAsync(token);
-                    await Dispatcher.InvokeAsync(() => { SetConnectionBadge(simulated ? "Эмулятор подключён" : selected + " подключён", true); RememberPort(selected); });
+                    await Dispatcher.InvokeAsync(() => { SetConnectionBadge(simulated ? "Эмулятор подключён" : selected + " подключён", true); RememberPort(selected); UpdateBacklightState(session.Capabilities!.SupportsBrightness, simulated); });
                     var clock = Stopwatch.StartNew();
                     var lastStats = TimeSpan.Zero;
                     var lastPing = TimeSpan.Zero;
                     var lastSync = TimeSpan.Zero;
                     long bytes = 0; int frames = 0;
                     Guid sentPageId = Guid.Empty;
+                    int appliedBrightness = -1;
                     while (true)
                     {
                         token.ThrowIfCancellationRequested();
                         if (simulated) emulator!.Disconnected = DateTime.UtcNow.Ticks < Interlocked.Read(ref simulatedOutageUntilTicks);
+                        int brightness = Volatile.Read(ref desiredBrightness);
+                        if (session.Capabilities!.SupportsBrightness && brightness != appliedBrightness)
+                        {
+                            await session.SetBrightnessAsync(brightness, token);
+                            appliedBrightness = brightness;
+                            await Dispatcher.InvokeAsync(() => BacklightApplied(brightness));
+                        }
                         var pending = Volatile.Read(ref latestFrame);
                         if (Interlocked.Exchange(ref forceFull, 0) == 1 || pending.PageId != sentPageId) session.RequestFullFrame();
                         bool sent = await session.SendFrameAsync(pending.Pixels, token);
@@ -230,7 +242,7 @@ public partial class MainWindow : Window
                 }
                 catch (Exception ex) when (ex is IOException or TimeoutException or UnauthorizedAccessException or InvalidOperationException)
                 {
-                    await Dispatcher.InvokeAsync(() => SetConnectionBadge("Восстановление: " + ex.Message, false, true));
+                    await Dispatcher.InvokeAsync(() => { SetConnectionBadge("Восстановление: " + ex.Message, false, true); UpdateBacklightState(null); });
                     await Task.Delay(1000, token);
                 }
             }
@@ -238,7 +250,7 @@ public partial class MainWindow : Window
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
         catch (Exception ex)
         {
-            await Dispatcher.InvokeAsync(() => SetConnectionBadge("Ошибка соединения: " + ex.Message, false, true));
+            await Dispatcher.InvokeAsync(() => { SetConnectionBadge("Ошибка соединения: " + ex.Message, false, true); UpdateBacklightState(null); });
         }
     }
 

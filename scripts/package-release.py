@@ -1,18 +1,19 @@
 """Package a published Windows app and prebuilt firmware, without user settings."""
 from pathlib import Path
 from hashlib import sha256
-import json, shutil, zipfile, html, argparse
+import json, shutil, zipfile, argparse
 from markdown_it import MarkdownIt
 
 repo = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 parser.add_argument('--stage', required=True, help='Directory containing the published App folder')
+parser.add_argument('--firmware-directory', default=str(repo / 'artifacts/firmware-release'))
 args = parser.parse_args()
 stage = Path(args.stage).resolve()
 app = stage / 'App'
 if not (app / 'MiniDisplay.exe').is_file():
     raise SystemExit('Publish the application into <stage>/App first')
-version = '0.4.0'
+version = '0.4.1'
 for folder in ['Firmware', 'Examples', 'Licenses', 'App/Firmware', 'App/Tools/esptool', 'App/Docs']:
     (stage / folder).mkdir(parents=True, exist_ok=True)
 
@@ -27,7 +28,9 @@ shutil.copy2(idf_root / 'LICENSE', stage / 'Licenses/ESP-IDF-LICENSE.txt')
 freertos = idf_root / 'components/freertos/FreeRTOS-Kernel/LICENSE.md'
 if freertos.is_file():
     shutil.copy2(freertos, stage / 'Licenses/FreeRTOS-LICENSE.md')
-description = idf_root.parent / 'project/build-default/project_description.json'
+project_marker = repo / '.tools/firmware-project-root.txt'
+firmware_project = Path(project_marker.read_text(encoding='utf-8-sig').strip()) if project_marker.is_file() else idf_root.parent / 'project'
+description = firmware_project / 'build-default/project_description.json'
 for component in json.loads(description.read_text(encoding='utf-8'))['build_components']:
     for notice in (idf_root / 'components' / component).rglob('*'):
         if notice.is_file() and notice.name.lower().startswith(('license', 'copying', 'notice')):
@@ -52,7 +55,7 @@ profiles = [
 ]
 manifest_profiles = []
 for profile_id, name, filename in profiles:
-    source = repo / 'artifacts/firmware-release' / filename
+    source = Path(args.firmware_directory).resolve() / filename
     data = source.read_bytes()
     if len(data) < 24 or len(data) > 4 * 1024 * 1024 or data[0] != 0xe9:
         raise SystemExit(f'Invalid merged firmware: {filename}')
@@ -76,13 +79,7 @@ for path in (repo / 'examples').glob('*'):
     if path.is_file():
         shutil.copy2(path, stage / 'Examples' / path.name)
 
-signals = [('3V3', 'VCC · 3,3 В', '#ef4444'), ('GND', 'GND', '#64748b'), ('GPIO4', 'SCL / CLK', '#eab308'), ('GPIO6', 'SDA / DIN', '#22c55e'), ('GPIO7', 'CS · если есть', '#f97316'), ('GPIO1', 'DC / A0', '#3b82f6'), ('GPIO3', 'RES / RST', '#a855f7')]
-svg = ['<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="660" viewBox="0 0 1000 660"><rect width="1000" height="660" rx="24" fill="#f3f6fc"/><g font-family="Segoe UI,Arial,sans-serif" fill="#17243a"><text x="40" y="48" font-size="26" font-weight="bold">ESP32-C3 SuperMini → ST7789 240×240</text><text x="40" y="80" font-size="17">Логическая схема: положение контактов на ваших платах может отличаться</text><rect x="40" y="110" width="310" height="440" rx="18" fill="#fff" stroke="#cbd5e1"/><rect x="650" y="110" width="310" height="440" rx="18" fill="#fff" stroke="#cbd5e1"/><text x="72" y="150" font-size="23" font-weight="bold">ESP32-C3</text><text x="680" y="150" font-size="23" font-weight="bold">ST7789 · SPI</text>']
-for index, (pin, label, color) in enumerate(signals):
-    y = 195 + index * 46
-    svg.append(f'<text x="72" y="{y+6}" font-size="21">{html.escape(pin)}</text><path d="M300 {y} H680" stroke="{color}" stroke-width="5"/><circle cx="300" cy="{y}" r="6" fill="{color}"/><circle cx="680" cy="{y}" r="6" fill="{color}"/><rect x="698" y="{y-20}" width="245" height="33" fill="white"/><text x="707" y="{y+6}" font-size="20">{html.escape(label)}</text>')
-svg.append('<text x="40" y="588" font-size="19">USB платы → ПК · GPIO18/19 не занимать · MISO не нужен</text><text x="40" y="624" font-size="18">BL/LED: подключать по документации модуля; готовая прошивка GPIO не управляет</text></g></svg>')
-wiring = ''.join(svg)
+wiring = (repo / 'docs/wiring.svg').read_text(encoding='utf-8')
 guide = (repo / 'docs/user-guide.md').read_text(encoding='utf-8')
 body = MarkdownIt('commonmark', {'html':False}).enable('table').render(guide)
 css = 'body{margin:0;background:#f5f7fc;color:#243247;font:16px/1.65 Segoe UI,Arial,sans-serif}main{max-width:1080px;margin:32px auto;padding:36px 48px;background:white;border:1px solid #e1e7f1;border-radius:18px}h1{color:#3658ff;font-size:36px;line-height:1.2}h2{margin-top:40px;color:#17243a;line-height:1.3}h3{margin-top:28px}a{color:#3153e8}code{background:#eef2fa;padding:2px 5px;border-radius:4px;overflow-wrap:anywhere}pre{background:#eef2fa;padding:18px;overflow:auto;border-radius:9px}pre code{padding:0}table{border-collapse:collapse;width:100%;margin:18px 0;font-size:14px}td,th{border:1px solid #dce4ef;padding:10px 12px;text-align:left;vertical-align:top;overflow-wrap:anywhere}th{background:#eef2ff}img{max-width:100%;height:auto}li{margin:8px 0}blockquote{border-left:4px solid #3658ff;margin:18px 0;padding:4px 18px;background:#f5f7ff}@media(max-width:720px){main{margin:0;padding:22px;border:0;border-radius:0}table{font-size:12px}td,th{padding:7px}}@media print{body{background:white}main{border:0;margin:0;padding:0}h2{break-after:avoid}tr,img{break-inside:avoid}}'

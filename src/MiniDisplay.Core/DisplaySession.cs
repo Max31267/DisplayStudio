@@ -27,7 +27,15 @@ public sealed class DisplaySession : IAsyncDisposable
     public async Task ConnectAsync(CancellationToken cancellationToken)
     {
         received.Clear();
-        var response = await ExchangeAsync(MessageType.Hello, [], MessageType.Capabilities, cancellationToken);
+        Capabilities = null;
+        Packet response;
+        try { response = await ExchangeAsync(MessageType.Hello, [1], MessageType.Capabilities, cancellationToken); }
+        catch (FullFrameRequiredException)
+        {
+            // Firmware 0.4.0 accepts only the empty Hello. Never send it unknown control commands.
+            received.Clear();
+            response = await ExchangeAsync(MessageType.Hello, [], MessageType.Capabilities, cancellationToken);
+        }
         Capabilities = DeviceCapabilities.Parse(response.Payload);
         differ.Invalidate(); full = true;
         await SyncTimeAsync(cancellationToken);
@@ -42,6 +50,15 @@ public sealed class DisplaySession : IAsyncDisposable
     }
 
     public void RequestFullFrame() { differ.Invalidate(); full = true; }
+
+    public async Task<bool> SetBrightnessAsync(int percent, CancellationToken cancellationToken)
+    {
+        if (percent is < 0 or > 100) throw new ArgumentOutOfRangeException(nameof(percent));
+        if (Capabilities is null) throw new InvalidOperationException("Сначала подключитесь к устройству.");
+        if (!Capabilities.SupportsBrightness) return false;
+        await ExchangeAsync(MessageType.SetBrightness, [(byte)percent], MessageType.Ack, cancellationToken);
+        return true;
+    }
 
     public async Task<bool> SendFrameAsync(byte[] frame, CancellationToken cancellationToken)
     {

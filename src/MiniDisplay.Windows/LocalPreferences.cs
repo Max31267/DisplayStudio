@@ -11,6 +11,7 @@ public sealed record LocalPreferences
     public string LastProjectPath { get; init; } = "";
     public string LastPort { get; init; } = "";
     public Guid LastPageId { get; init; }
+    public int Brightness { get; init; } = 80;
     private static readonly object Gate = new();
     public static void Update(Func<LocalPreferences, LocalPreferences> change)
     { lock (Gate) { var current = Load(); var updated = change(current); if (updated != current) updated.Save(); } }

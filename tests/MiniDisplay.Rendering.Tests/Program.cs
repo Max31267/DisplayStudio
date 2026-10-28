@@ -140,9 +140,10 @@ string? previousProfile=Environment.GetEnvironmentVariable("DISPLAYSTUDIO_PROFIL
 try
 {
     Environment.SetEnvironmentVariable("DISPLAYSTUDIO_PROFILE_DIR",profile);
-    LocalPreferences.Update(value=>value with { CodexExecutable="codex.exe",LastProjectPath="example.mdisplay",LastPort="COM8" });
+    Check(LocalPreferences.Load().Brightness == 80,"New profiles should start at 80% brightness");
+    LocalPreferences.Update(value=>value with { CodexExecutable="codex.exe",LastProjectPath="example.mdisplay",LastPort="COM8",Brightness=37 });
     LocalPreferences.Update(value=>value with { AutoConnect=false });
-    var saved=LocalPreferences.Load(); Check(saved.CodexExecutable=="codex.exe" && saved.LastProjectPath=="example.mdisplay" && saved.LastPort=="COM8" && !saved.AutoConnect,"Updating one preference must preserve all other local settings");
+    var saved=LocalPreferences.Load(); Check(saved.CodexExecutable=="codex.exe" && saved.LastProjectPath=="example.mdisplay" && saved.LastPort=="COM8" && !saved.AutoConnect && saved.Brightness==37,"Updating one preference must preserve all other local settings, including brightness");
 }
 finally{Environment.SetEnvironmentVariable("DISPLAYSTUDIO_PROFILE_DIR",previousProfile);if(Directory.Exists(profile) && Path.GetDirectoryName(Path.GetFullPath(profile))==Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory))Directory.Delete(profile,true);}
 Console.WriteLine("PASS  autostart quoting and independent local preferences");

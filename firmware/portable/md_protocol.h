@@ -13,7 +13,8 @@
 
 enum md_type {
     MD_HELLO = 1, MD_CAPABILITIES = 2, MD_FRAME_BEGIN = 3, MD_PIXELS = 4,
-    MD_FRAME_END = 5, MD_ACK = 6, MD_REQUEST_FULL = 7, MD_TIME_SYNC = 8, MD_PING = 9
+    MD_FRAME_END = 5, MD_ACK = 6, MD_REQUEST_FULL = 7, MD_TIME_SYNC = 8, MD_PING = 9,
+    MD_SET_BRIGHTNESS = 10
 };
 
 typedef struct {
